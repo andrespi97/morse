@@ -46,9 +46,7 @@
     symbols: $("symbols"),
     message: $("message"),
     messageText: $("messageText"),
-    messageEmpty: $("messageEmpty"),
     caret: $("caret"),
-    stateLabel: $("stateLabel"),
     soundToggle: $("soundToggle"),
     translateToggle: $("translateToggle"),
     clearBtn: $("clearBtn"),
@@ -230,18 +228,8 @@
     const hasText = state.text.length > 0;
 
     el.messageText.textContent = state.text;
-    el.messageText.hidden = !state.translate;
+    el.messageText.hidden = !(state.translate && hasText);
     el.caret.hidden = !(state.translate && hasText);
-
-    if (!state.translate) {
-      el.messageEmpty.hidden = false;
-      el.messageEmpty.textContent = "Traducción desactivada.";
-    } else if (hasText) {
-      el.messageEmpty.hidden = true;
-    } else {
-      el.messageEmpty.hidden = false;
-      el.messageEmpty.textContent = "Pulsa corto para punto, largo para raya.";
-    }
 
     el.message.scrollLeft = el.message.scrollWidth;
   }
@@ -262,10 +250,7 @@
     }
 
     if (!code) {
-      const ghost = document.createElement("span");
-      ghost.className = "sym-ghost";
-      ghost.textContent = "·\u00a0\u00a0—";
-      el.symbols.replaceChildren(ghost);
+      el.symbols.replaceChildren();
       return;
     }
 
@@ -278,28 +263,6 @@
       frag.appendChild(item);
     }
     el.symbols.replaceChildren(frag);
-  }
-
-  function updateStatus() {
-    let mode = "idle";
-    let label = "en espera";
-
-    if (previewCode !== null) {
-      mode = "preview";
-      label = "consulta";
-    } else if (state.pressing) {
-      mode = state.long ? "dash" : "dot";
-      label = state.long ? "raya" : "punto";
-    } else if (state.pending) {
-      mode = "pending";
-      label = "en curso";
-    } else if (lastCommittedCode) {
-      mode = "letter";
-      label = "letra";
-    }
-
-    el.stateLabel.dataset.state = mode;
-    el.stateLabel.textContent = label;
   }
 
   function appendText(chunk) {
@@ -553,14 +516,6 @@
     });
     root.append(rootHit, rootCore, keyIcon());
 
-    const rootLabel = svgEl("text", {
-      class: "root-label",
-      x: ROOT.x,
-      y: ROOT.y + 48,
-    });
-    rootLabel.textContent = "ENTRADA";
-    root.appendChild(rootLabel);
-
     el.tree.append(edgeLayer, nodeLayer, root);
     rootGroup.el = root;
   }
@@ -633,8 +588,6 @@
         }
       }
     }
-
-    updateStatus();
   }
 
   function activateNode(target) {

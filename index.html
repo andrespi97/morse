@@ -21,19 +21,6 @@
 
   <div class="app" id="app">
     <header class="topbar">
-      <div class="brand" aria-label="Morse Code">
-        <svg class="brand-key" viewBox="0 0 32 26" aria-hidden="true">
-          <path d="M3.5 22.2h25" />
-          <path d="M7 22.2v-3.1h17.2v3.1" />
-          <path d="M7.4 19.1 22.6 11" />
-          <circle cx="22.9" cy="18.3" r="1.35" />
-          <circle cx="9.3" cy="10.4" r="3.1" />
-          <path d="M14.1 16.4v2.7" />
-          <path d="M24.2 18.3v-3.4" />
-        </svg>
-        <span class="brand-title">Morse <i>Code</i></span>
-      </div>
-
       <div class="switches">
         <label class="check" for="soundToggle">
           <input type="checkbox" id="soundToggle" checked />
@@ -49,12 +36,8 @@
     </header>
 
     <section class="tape" aria-label="Mensaje recibido">
-      <div class="tape-head">
-        <span class="tape-label">Cinta</span>
-        <span class="tape-state" id="stateLabel" data-state="idle">en espera</span>
-      </div>
       <div class="message" id="message" aria-live="polite">
-        <span class="message-text" id="messageText"></span><span class="caret" id="caret" aria-hidden="true"></span><span class="message-empty" id="messageEmpty">Pulsa corto para punto, largo para raya.</span>
+        <span class="message-text" id="messageText"></span><span class="caret" id="caret" aria-hidden="true"></span>
       </div>
     </section>
 
@@ -73,7 +56,6 @@
       <div class="key-btn" id="key" aria-hidden="true">
         <span class="key-symbol" id="keySymbol"></span>
       </div>
-      <p class="pad-hint" aria-hidden="true">corto = punto&nbsp;&nbsp;·&nbsp;&nbsp;mantén = raya</p>
     </section>
   </div>
 
