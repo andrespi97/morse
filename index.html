@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+  <title>Morse Code — telégrafo</title>
+  <meta name="description" content="Telégrafo morse para móvil: pulsación corta punto, pulsación larga raya, con el grafo del código, sonido y traducción." />
+  <meta name="theme-color" content="#0b0906" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Morse" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="backdrop" aria-hidden="true"></div>
+
+  <div class="app" id="app">
+    <header class="topbar">
+      <div class="brand" aria-label="Morse Code">
+        <svg class="brand-key" viewBox="0 0 32 26" aria-hidden="true">
+          <path d="M3.5 22.2h25" />
+          <path d="M7 22.2v-3.1h17.2v3.1" />
+          <path d="M7.4 19.1 22.6 11" />
+          <circle cx="22.9" cy="18.3" r="1.35" />
+          <circle cx="9.3" cy="10.4" r="3.1" />
+          <path d="M14.1 16.4v2.7" />
+          <path d="M24.2 18.3v-3.4" />
+        </svg>
+        <span class="brand-title">Morse <i>Code</i></span>
+      </div>
+
+      <div class="switches">
+        <label class="check" for="soundToggle">
+          <input type="checkbox" id="soundToggle" checked />
+          <span class="check-box" aria-hidden="true"></span>
+          <span class="check-text">Sonido</span>
+        </label>
+        <label class="check" for="translateToggle">
+          <input type="checkbox" id="translateToggle" checked />
+          <span class="check-box" aria-hidden="true"></span>
+          <span class="check-text">Traducir</span>
+        </label>
+      </div>
+    </header>
+
+    <section class="tape" aria-label="Mensaje recibido">
+      <div class="tape-head">
+        <span class="tape-label">Cinta</span>
+        <span class="tape-state" id="stateLabel" data-state="idle">en espera</span>
+      </div>
+      <div class="message" id="message" aria-live="polite">
+        <span class="message-text" id="messageText"></span><span class="caret" id="caret" aria-hidden="true"></span><span class="message-empty" id="messageEmpty">Pulsa corto para punto, largo para raya.</span>
+      </div>
+    </section>
+
+    <main class="graph" id="graph" aria-label="Grafo del código morse">
+      <svg id="morseTree" viewBox="0 0 456 500" role="img" aria-label="Grafo morse: cada letra es un punto o una raya unido por líneas rectas; la entrada está arriba en el centro."></svg>
+    </main>
+
+    <div class="livebar">
+      <div class="symbols" id="symbols" aria-hidden="true"></div>
+      <div class="tools">
+        <button type="button" class="tool" id="clearBtn">Limpiar</button>
+      </div>
+    </div>
+
+    <section class="pad" id="pad" tabindex="0" role="button" aria-label="Tecla morse. Pulsa corto para punto y mantén pulsado para raya.">
+      <div class="key-btn" id="key" aria-hidden="true">
+        <span class="key-symbol" id="keySymbol"></span>
+      </div>
+      <p class="pad-hint" aria-hidden="true">corto = punto&nbsp;&nbsp;·&nbsp;&nbsp;mantén = raya</p>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

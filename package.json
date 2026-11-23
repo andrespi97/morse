@@ -1,0 +1,10 @@
+{
+  "name": "morse",
+  "private": true,
+  "scripts": {
+    "start": "serve . -p 8080"
+  },
+  "devDependencies": {
+    "serve": "^14.2.4"
+  }
+}

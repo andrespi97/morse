@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Morse">
+  <rect width="512" height="512" rx="112" fill="#0b0c0e"/>
+  <circle cx="196" cy="256" r="30" fill="#ffcf8a"/>
+  <rect x="248" y="234" width="96" height="44" rx="14" fill="#f5a94a"/>
+  <circle cx="256" cy="378" r="12" fill="#f5a94a" opacity="0.55"/>
+  <rect x="282" y="369" width="42" height="18" rx="6" fill="#ffcf8a" opacity="0.55"/>
+</svg>
