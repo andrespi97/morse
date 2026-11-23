@@ -35,7 +35,7 @@
   const MIN_TONE_MS = 70;      // so quick taps still make an audible blip
   const MAX_PRESS_MS = 20000;  // safety: never let a press ring forever
   const TONE_HZ = 600;
-  const TONE_GAIN = 0.16;
+  const TONE_GAIN = 0.22;
   const MAX_TEXT = 600;
 
   const $ = (id) => document.getElementById(id);
@@ -95,13 +95,19 @@
    * gain gate that is silent by default. That way a lost pointerup can never
    * leave a tone ringing: releasing just ramps the gate to 0, and any weird
    * state can be flattened with hardStop().
+   *
+   * Mobile (esp. iOS) keeps AudioContext suspended until resume() finishes
+   * inside a user gesture. We unlock with a silent buffer and only open the
+   * gate once the context is running.
    */
   const tone = (() => {
     let ctx = null;
     let osc = null;
     let gate = null;
     let startedAt = 0;
-    let open = false;
+    let wantTone = false;
+    let pendingMinMs = 0;
+    let unlockChain = Promise.resolve();
 
     function param() {
       return gate ? gate.gain : null;
@@ -124,6 +130,36 @@
       }
     }
 
+    function buildGraph() {
+      if (!ctx || osc) return;
+      try {
+        osc = ctx.createOscillator();
+        gate = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.value = TONE_HZ;
+        gate.gain.value = 0;
+        osc.connect(gate);
+        gate.connect(ctx.destination);
+        osc.start();
+      } catch {
+        osc = null;
+        gate = null;
+      }
+    }
+
+    function tickSilent() {
+      if (!ctx) return;
+      try {
+        const buffer = ctx.createBuffer(1, 1, ctx.sampleRate || 22050);
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start(0);
+      } catch {
+        /* ignore */
+      }
+    }
+
     function ensure() {
       if (!ctx) {
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -134,39 +170,16 @@
           return null;
         }
       }
-
-      if (ctx.state === "suspended") ctx.resume().catch(() => {});
-
-      if (!osc) {
-        try {
-          osc = ctx.createOscillator();
-          gate = ctx.createGain();
-          osc.type = "sine";
-          osc.frequency.value = TONE_HZ;
-          gate.gain.value = 0;
-          osc.connect(gate);
-          gate.connect(ctx.destination);
-          osc.start();
-        } catch {
-          osc = null;
-          gate = null;
-        }
-      }
-
+      buildGraph();
       return ctx;
     }
 
-    function start() {
-      if (!state.sound) return;
-      const c = ensure();
+    function applyOpen() {
+      const c = ctx;
       const g = param();
-      if (!c || !g) return;
-
-      const now = c.currentTime;
-      open = true;
-      startedAt = performance.now();
-
+      if (!c || !g || c.state !== "running") return;
       try {
+        const now = c.currentTime;
         hold(g, now);
         g.linearRampToValueAtTime(TONE_GAIN, now + 0.012);
       } catch {
@@ -174,27 +187,84 @@
       }
     }
 
-    function stop(minMs = 0) {
+    function applyClose(minMs) {
       const c = ctx;
       const g = param();
       if (!c || !g) return;
 
       const now = c.currentTime;
       const elapsed = performance.now() - startedAt;
-      const wait = open ? Math.max(0, minMs - elapsed) / 1000 : 0;
-      open = false;
+      const wait = Math.max(0, minMs - elapsed) / 1000;
 
       try {
         hold(g, now);
-        if (wait > 0) g.setValueAtTime(Math.max(g.value, 0), now + wait);
+        if (wait > 0) {
+          g.setValueAtTime(TONE_GAIN, now);
+          g.setValueAtTime(TONE_GAIN, now + wait);
+        }
         g.linearRampToValueAtTime(0, now + wait + 0.015);
       } catch {
         hardStop();
       }
     }
 
+    function unlock() {
+      const c = ensure();
+      if (!c) return Promise.resolve(null);
+
+      /* resume() must be kicked off synchronously inside the user gesture. */
+      let ready;
+      if (c.state === "suspended" || c.state === "interrupted") {
+        try {
+          ready = c.resume().then(() => c);
+        } catch {
+          ready = Promise.resolve(c);
+        }
+      } else {
+        ready = Promise.resolve(c);
+      }
+
+      tickSilent();
+
+      unlockChain = ready
+        .then((audio) => {
+          if (!audio) return null;
+          buildGraph();
+          tickSilent();
+          return audio;
+        })
+        .catch(() => ensure());
+
+      return unlockChain;
+    }
+
+    function start() {
+      if (!state.sound) return;
+      wantTone = true;
+      pendingMinMs = 0;
+      startedAt = performance.now();
+
+      unlock().then(() => {
+        if (!state.sound) return;
+        if (wantTone) {
+          applyOpen();
+          return;
+        }
+        /* Released before unlock finished: still give the minimum blip. */
+        applyOpen();
+        applyClose(pendingMinMs || MIN_TONE_MS);
+      });
+    }
+
+    function stop(minMs = 0) {
+      wantTone = false;
+      pendingMinMs = minMs;
+      applyClose(minMs);
+    }
+
     function hardStop() {
-      open = false;
+      wantTone = false;
+      pendingMinMs = 0;
       const c = ctx;
       const g = param();
       if (!c || !g) return;
@@ -207,11 +277,14 @@
       }
     }
 
-    return { start, stop, hardStop, ensure };
+    return { start, stop, hardStop, ensure, unlock };
   })();
+
+  let activePointerId = null;
 
   /* Last-resort silencer, in case a pointerup never reaches the pad. */
   function panic() {
+    activePointerId = null;
     if (state.pressing) endPress(true);
     tone.hardStop();
   }
@@ -789,35 +862,62 @@
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.preventDefault();
 
+    /* Unlock audio inside the user gesture so iOS/Android allow sound. */
+    if (state.sound) tone.unlock();
+
     try {
       el.pad.setPointerCapture(event.pointerId);
     } catch {
       /* not critical */
     }
 
+    activePointerId = event.pointerId;
     const rect = el.pad.getBoundingClientRect();
     beginPress({ x: event.clientX - rect.left, y: event.clientY - rect.top });
   });
 
   el.pad.addEventListener("pointerup", (event) => {
     if (!state.pressing) return;
+    if (activePointerId !== null && event.pointerId !== activePointerId) return;
     event.preventDefault();
+    activePointerId = null;
     endPress(false);
   });
 
-  el.pad.addEventListener("pointercancel", () => endPress(true));
-  el.pad.addEventListener("lostpointercapture", () => endPress(true));
+  el.pad.addEventListener("pointercancel", (event) => {
+    if (activePointerId !== null && event.pointerId !== activePointerId) return;
+    activePointerId = null;
+    endPress(true);
+  });
+
+  el.pad.addEventListener("lostpointercapture", (event) => {
+    if (!state.pressing) return;
+    if (activePointerId !== null && event.pointerId !== activePointerId) return;
+    activePointerId = null;
+    endPress(true);
+  });
+
   el.pad.addEventListener("contextmenu", (event) => event.preventDefault());
 
-  /* Safety net: any pointer release anywhere ends the press + silences. */
-  for (const type of ["pointerup", "pointercancel", "touchend", "touchcancel", "mouseup"]) {
-    window.addEventListener(type, () => {
-      if (state.pressing) endPress(true);
-    });
-  }
+  /* Safety net if the finger lifts outside the pad / capture is lost. */
+  window.addEventListener("pointerup", (event) => {
+    if (!state.pressing) return;
+    if (activePointerId !== null && event.pointerId !== activePointerId) return;
+    activePointerId = null;
+    endPress(true);
+  });
+  window.addEventListener("pointercancel", (event) => {
+    if (!state.pressing) return;
+    if (activePointerId !== null && event.pointerId !== activePointerId) return;
+    activePointerId = null;
+    endPress(true);
+  });
 
   window.addEventListener("blur", panic);
   window.addEventListener("pagehide", panic);
+
+  document.addEventListener("selectstart", (event) => event.preventDefault());
+  document.addEventListener("dragstart", (event) => event.preventDefault());
 
   /* Keyboard: space acts as the key, for desktop testing. */
   window.addEventListener("keydown", (event) => {
@@ -914,7 +1014,7 @@
 
   el.soundToggle.addEventListener("change", () => {
     applySound(el.soundToggle.checked);
-    if (state.sound) tone.ensure();
+    if (state.sound) tone.unlock();
   });
 
   el.translateToggle.addEventListener("change", () => {
@@ -929,9 +1029,17 @@
     if (document.hidden) {
       panic();
     } else if (state.sound) {
-      tone.ensure();
+      tone.unlock();
     }
   });
+
+  /* Warm the audio graph on the first tap anywhere (toggle / pad / UI). */
+  const warmAudio = () => {
+    if (state.sound) tone.unlock();
+  };
+  for (const type of ["pointerdown", "touchstart", "click"]) {
+    document.addEventListener(type, warmAudio, { capture: true, passive: true, once: true });
+  }
 
   /* ------------------------------------------------------------------ */
   /*  Init                                                               */
